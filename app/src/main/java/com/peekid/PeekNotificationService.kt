@@ -46,6 +46,11 @@ class PeekNotificationService : NotificationListenerService() {
         // Extract sender name from EXTRA_TITLE
         val sender = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return
 
+        // Skip whitelisted contacts (let their messages show normally)
+        if (WhitelistManager.isWhitelisted(this, sender)) {
+            return
+        }
+
         // 4. If it IS the heads-up popup notification -> cancel it and post ONE PeekID popup instead
         cancelNotification(sbn.key)
 

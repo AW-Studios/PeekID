@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="status_active">#10B981</color>
+    <color name="status_active_container">#1A10B981</color>
+    <color name="status_inactive">#EF4444</color>
+    <color name="status_inactive_container">#1AEF4444</color>
+    <color name="status_warning">#F59E0B</color>
+    <color name="status_warning_container">#1AF59E0B</color>
+</resources>
