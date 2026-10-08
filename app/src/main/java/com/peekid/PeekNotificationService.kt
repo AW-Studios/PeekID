@@ -25,20 +25,19 @@ class PeekNotificationService : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        // Only intercept WhatsApp and WhatsApp Business
+        // 1. If package is not whatsapp -> return (ignore)
         if (!NotificationHelper.isSupported(sbn.packageName)) return
 
-        // Never intercept calls or ongoing background services
+        // 2. If it is a call, fullScreenIntent, ongoing, or transport -> return (ignore)
         if (sbn.isOngoing) return
         if (sbn.notification.category == Notification.CATEGORY_CALL) return
+        if (sbn.notification.category == Notification.CATEGORY_TRANSPORT) return
         if (sbn.notification.fullScreenIntent != null) return
 
-        // Group summary notifications bundle messages and leak text when pulled down.
-        // Cancel them so WhatsApp's preview is dismissed, but do not re-post.
+        // 3. If the notification is silent / group summary -> leave it completely alone in drawer
         val isGroupSummary = sbn.notification.flags and
             Notification.FLAG_GROUP_SUMMARY != 0
         if (isGroupSummary) {
-            cancelNotification(sbn.key)
             return
         }
 
@@ -47,7 +46,7 @@ class PeekNotificationService : NotificationListenerService() {
         // Extract sender name from EXTRA_TITLE
         val sender = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return
 
-        // Cancel the original notification (which contains message text)
+        // 4. If it IS the heads-up popup notification -> cancel it and post ONE PeekID popup instead
         cancelNotification(sbn.key)
 
         val whatsappIcon = try {
@@ -59,7 +58,6 @@ class PeekNotificationService : NotificationListenerService() {
             null
         }
 
-        // Re-post a single sanitized version
         val notificationManager =
             getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
@@ -71,12 +69,12 @@ class PeekNotificationService : NotificationListenerService() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
 
-        // Forward click action so tapping opens WhatsApp
+        // Forward click action so tapping opens the chat in WhatsApp
         sbn.notification.contentIntent?.let {
             builder.setContentIntent(it)
         }
 
-        // Use a fixed NOTIFICATION_ID so only ONE notification card appears in the shade
+        // Post exactly ONE PeekID popup
         notificationManager.notify(NOTIFICATION_ID, builder.build())
     }
 
