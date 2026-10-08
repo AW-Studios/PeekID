@@ -4,6 +4,10 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.ComponentName
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -36,12 +40,22 @@ class PeekNotificationService : NotificationListenerService() {
         // Cancel the original notification
         cancelNotification(sbn.key)
 
+        val whatsappIcon = try {
+            val pm = applicationContext.packageManager
+            val drawable = pm.getApplicationIcon("com.whatsapp")
+            (drawable as? BitmapDrawable)?.bitmap
+                ?: drawableToBitmap(drawable)
+        } catch (e: Exception) {
+            null
+        }
+
         // Re-post sanitized version
         val notificationManager =
             getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
         val sanitized = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
+            .setLargeIcon(whatsappIcon)
             .setContentTitle(sender)
             .setContentText("sent you a message")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -49,6 +63,20 @@ class PeekNotificationService : NotificationListenerService() {
             .build()
 
         notificationManager.notify(sbn.id, sanitized)
+    }
+
+    private fun drawableToBitmap(drawable: Drawable): Bitmap {
+        val width = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 192
+        val height = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 192
+        val bitmap = Bitmap.createBitmap(
+            width,
+            height,
+            Bitmap.Config.ARGB_8888
+        )
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+        return bitmap
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
