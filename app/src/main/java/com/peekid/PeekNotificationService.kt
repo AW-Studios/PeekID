@@ -17,6 +17,7 @@ class PeekNotificationService : NotificationListenerService() {
 
     private val CHANNEL_ID = "peekid_channel"
     private val CHANNEL_NAME = "PeekID Notifications"
+    private val NOTIFICATION_ID = 1001
 
     override fun onCreate() {
         super.onCreate()
@@ -27,17 +28,26 @@ class PeekNotificationService : NotificationListenerService() {
         // Only intercept WhatsApp and WhatsApp Business
         if (!NotificationHelper.isSupported(sbn.packageName)) return
 
+        // Never intercept calls or ongoing background services
+        if (sbn.isOngoing) return
+        if (sbn.notification.category == Notification.CATEGORY_CALL) return
+        if (sbn.notification.fullScreenIntent != null) return
+
+        // Group summary notifications bundle messages and leak text when pulled down.
+        // Cancel them so WhatsApp's preview is dismissed, but do not re-post.
+        val isGroupSummary = sbn.notification.flags and
+            Notification.FLAG_GROUP_SUMMARY != 0
+        if (isGroupSummary) {
+            cancelNotification(sbn.key)
+            return
+        }
+
         val extras = sbn.notification.extras
 
         // Extract sender name from EXTRA_TITLE
-        val sender = extras.getString(Notification.EXTRA_TITLE) ?: return
+        val sender = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return
 
-        // Skip group summary notifications (they have no real sender)
-        val isGroupSummary = sbn.notification.flags and
-            Notification.FLAG_GROUP_SUMMARY != 0
-        if (isGroupSummary) return
-
-        // Cancel the original notification
+        // Cancel the original notification (which contains message text)
         cancelNotification(sbn.key)
 
         val whatsappIcon = try {
@@ -49,20 +59,25 @@ class PeekNotificationService : NotificationListenerService() {
             null
         }
 
-        // Re-post sanitized version
+        // Re-post a single sanitized version
         val notificationManager =
             getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
-        val sanitized = NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setLargeIcon(whatsappIcon)
             .setContentTitle(sender)
             .setContentText("sent you a message")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .build()
 
-        notificationManager.notify(sbn.id, sanitized)
+        // Forward click action so tapping opens WhatsApp
+        sbn.notification.contentIntent?.let {
+            builder.setContentIntent(it)
+        }
+
+        // Use a fixed NOTIFICATION_ID so only ONE notification card appears in the shade
+        notificationManager.notify(NOTIFICATION_ID, builder.build())
     }
 
     private fun drawableToBitmap(drawable: Drawable): Bitmap {
